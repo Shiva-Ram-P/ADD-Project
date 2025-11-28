@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+<head>
+        <title>BrainQuest – Interactive Quiz</title>
+
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap');
+
+        body { 
+            background:white;
+            font-family: "Poppins", sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #dfe9f3, #ffffff);
+        }
+
+        header {
+            background: linear-gradient(90deg, #4C8BF5, #6A5AF9);
+            color: black;
+            text-align: center;
+            padding: 25px 0;
+            font-size: 25px;
+            letter-spacing: 1px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        main {
+            width: 90%;
+            max-width: 650px;
+            margin: 40px auto;
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+            transition: 0.3s ease;
+        }
+
+        main:hover {
+            transform: scale(1.01);
+        }
+
+        h2 {
+            color: #333;
+            font-weight: 600;
+        }
+
+        select {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            border: 2px solid #4C8BF5;
+            border-radius: 8px;
+            outline: none;
+        }
+
+        button {
+            background: #4C8BF5;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            cursor: pointer;
+            margin-top: 18px;
+            border-radius: 50px;
+            font-size: 17px;
+            transition: 0.3s ease;
+        }
+
+        button:hover {
+            background: #3A6FD0;
+            transform: translateY(-3px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        #options button {
+            display: block;
+            width: 100%;
+            margin: 10px 0;
+            background: #e8e8e8;
+            color: #333;
+            border-radius: 10px;
+            font-size: 16px;
+            padding: 12px;
+            transition: 0.25s ease-in-out;
+        }
+
+        #options button:hover {
+            background: #cddfff;
+            transform: scale(1.02);
+        }
+
+        #options button.selected {
+            background: #a2c5ff;
+            border-left: 5px solid #4C8BF5;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            padding: 15px;
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <h1>BrainQuest – Interactive Quiz System</h1>
+    </header>
+
+    <main>
+
+        <!-- Topic Select Section -->
+        <section id="topic-section">
+            <h2>Select a Topic</h2>
+
+            <select id="topicSelect">
+                <option value="">-- Choose Topic --</option>
+                <option value="gk">General Knowledge</option>
+                <option value="cs">Computer Science</option>
+                <option value="sports">Sports</option>
+            </select>
+
+            <button id="startBtn">Start Quiz</button>
+        </section>
+
+        <!-- Quiz Section -->
+        <section id="quiz-section" class="hidden">
+            <h2 id="questionText"></h2>
+
+            <div id="options"></div>
+
+            <button id="nextBtn">Next</button>
+        </section>
+
+        <!-- Result Section -->
+        <section id="result-section" class="hidden">
+            <h2>Your Score</h2>
+            <p id="scoreText" style="font-size:20px; font-weight:600;"></p>
+            <button id="restartBtn">Restart</button>
+        </section>
+
+    </main>
+
+    <footer>
+        © 2025 BrainQuest Quiz
+    </footer>
+
+    <!-- ================= JavaScript ================= -->
+    <script>
+        // Quiz data stored in arrays (per topic)
+        const quizData = {
+            gk: [
+                { q: "Which planet is known as the Red Planet?", options: ["Earth", "Mars", "Venus"], answer: 1 },
+                { q: "National animal of India?", options: ["Lion", "Tiger", "Elephant"], answer: 1 },
+                { q: "Largest ocean on Earth?", options: ["Pacific", "Indian", "Atlantic"], answer: 0 }
+            ],
+
+            cs: [
+                { q: "HTML stands for?", options: ["HyperText Markup Language", "HighText Machine Language", "Hyper Tool Multi Language"], answer: 0 },
+                { q: "CPU is the ___ of a computer.", options: ["Brain", "Heart", "Storage"], answer: 0 },
+                { q: "RAM is ___ memory.", options: ["Permanent", "Temporary", "Virtual"], answer: 1 }
+            ],
+
+            sports: [
+                { q: "How many players in a cricket team?", options: ["10", "11", "12"], answer: 1 },
+                { q: "Olympics happen every ___ years.", options: ["2", "3", "4"], answer: 2 },
+                { q: "Which game uses a racket?", options: ["Football", "Tennis", "Hockey"], answer: 1 }
+            ]
+        };
+
+        // HTML elements
+        const topicSelect = document.getElementById("topicSelect");
+        const startBtn = document.getElementById("startBtn");
+        const quizSection = document.getElementById("quiz-section");
+        const topicSection = document.getElementById("topic-section");
+        const resultSection = document.getElementById("result-section");
+        const questionText = document.getElementById("questionText");
+        const optionsContainer = document.getElementById("options");
+        const nextBtn = document.getElementById("nextBtn");
+        const scoreText = document.getElementById("scoreText");
+        const restartBtn = document.getElementById("restartBtn");
+
+        // Quiz variables
+        let currentTopic = "";
+        let currentIndex = 0;
+        let score = 0;
+        let selectedOption = null;
+
+        // Start quiz
+        startBtn.addEventListener("click", () => {
+            currentTopic = topicSelect.value;
+
+            if (currentTopic === "") {
+                alert("Please select a topic!");
+                return;
+            }
+
+            topicSection.classList.add("hidden");
+            quizSection.classList.remove("hidden");
+
+            loadQuestion();
+        });
+
+        // Load question
+        function loadQuestion() {
+            selectedOption = null;
+            optionsContainer.innerHTML = "";
+
+            const questionData = quizData[currentTopic][currentIndex];
+
+            questionText.textContent = questionData.q;
+
+            questionData.options.forEach((opt, index) => {
+                const button = document.createElement("button");
+                button.textContent = opt;
+
+                button.addEventListener("click", () => {
+                    document.querySelectorAll("#options button").forEach(btn => btn.classList.remove("selected"));
+                    button.classList.add("selected");
+                    selectedOption = index;
+                });
+
+                optionsContainer.appendChild(button);
+            });
+        }
+
+        // Next button
+        nextBtn.addEventListener("click", () => {
+            if (selectedOption === null) {
+                alert("Please select an option!");
+                return;
+            }
+
+            if (selectedOption === quizData[currentTopic][currentIndex].answer) {
+                score++;
+            }
+
+            currentIndex++;
+
+            if (currentIndex >= quizData[currentTopic].length) {
+                showResult();
+            } else {
+                loadQuestion();
+            }
+        });
+
+        // Show result
+        function showResult() {
+            quizSection.classList.add("hidden");
+            resultSection.classList.remove("hidden");
+
+            scoreText.textContent = `You scored ${score} out of ${quizData[currentTopic].length}`;
+        }
+
+        // Restart quiz
+        restartBtn.addEventListener("click", () => {
+            currentIndex = 0;
+            score = 0;
+
+            resultSection.classList.add("hidden");
+            topicSection.classList.remove("hidden");
+        });
+    </script>
+
+</body>
+</html>
