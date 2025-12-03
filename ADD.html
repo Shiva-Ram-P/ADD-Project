@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>LMS Dashboard — Single Page</title>
+  <meta name="description" content="Responsive LMS Dashboard demo with Tailwind CSS and vanilla JS (progress bars, sorting, filtering, modal)" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* tiny extra styling for focus outlines and smooth progress animation */
+    .progress-bar { transition: width 800ms cubic-bezier(.2,.8,.2,1); background-image: linear-gradient(90deg, rgba(255,255,255,0.06), rgba(255,255,255,0)); }
+    :focus { outline: 2px solid rgba(99,102,241,0.6); outline-offset: 2px; }
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+  </style>
+</head>
+<body class="antialiased bg-slate-50 text-slate-900">
+  <div class="max-w-7xl mx-auto p-4">
+    <header class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+      <div>
+        <h1 class="text-2xl font-semibold">LMS Dashboard</h1>
+        <p class="text-sm text-slate-500">Student view — track course progress, announcements and performance</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <label for="role" class="text-sm text-slate-600">Role</label>
+        <select id="role" class="px-3 py-1 border rounded" aria-label="Select role">
+          <option>Student</option>
+          <option>Instructor</option>
+          <option>Admin</option>
+        </select>
+        <div class="text-sm text-slate-500">Jane Doe</div>
+      </div>
+    </header>
+
+    <!-- Announcements -->
+    <section class="mb-6">
+      <h2 class="text-lg font-medium mb-2">Announcements</h2>
+      <div id="announcements" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"></div>
+    </section>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <!-- Left column: Courses -->
+      <div class="lg:col-span-1 space-y-4">
+        <div class="bg-white p-4 rounded-2xl shadow">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-medium">Your Courses</h3>
+            <button id="newCourseBtn" class="text-sm px-2 py-1 bg-indigo-50 rounded" aria-label="Create new course">+ New</button>
+          </div>
+          <div id="courses" class="space-y-3" aria-live="polite"></div>
+        </div>
+
+        <div class="bg-white p-4 rounded-2xl shadow">
+          <h3 class="font-medium mb-3">Summary</h3>
+          <div class="text-sm text-slate-600">Overall completion: <span id="overallPercent">—</span></div>
+          <div class="mt-3 bg-slate-100 rounded-full h-4 overflow-hidden">
+            <div id="overallBar" class="progress-bar h-4 rounded-full" style="width:0%"></div>
+          </div>
+          <div class="mt-3 text-xs text-slate-500">Tip: Click a course's "View" to open details in a modal.</div>
+        </div>
+      </div>
+
+      <!-- Right columns: Performance + table -->
+      <div class="lg:col-span-2 space-y-4">
+        <div class="bg-white p-4 rounded-2xl shadow">
+          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-3">
+            <div>
+              <h3 class="font-medium">Performance</h3>
+              <div class="text-sm text-slate-500">Grades and progress across courses</div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+              <input id="filterInput" placeholder="Filter by course..." class="px-3 py-1 border rounded" aria-label="Filter courses" />
+              <select id="sortSelect" class="px-3 py-1 border rounded" aria-label="Sort by">
+                <option value="course">Sort: Course</option>
+                <option value="grade">Sort: Grade</option>
+                <option value="progress">Sort: Progress</option>
+              </select>
+              <button id="sortToggle" class="px-3 py-1 border rounded" aria-pressed="false" title="Toggle ascending/descending">Asc</button>
+              <button id="exportCSV" class="px-3 py-1 bg-slate-100 rounded">Export CSV</button>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm" id="gradesTable" aria-describedby="tableDesc">
+              <caption id="tableDesc" class="sr-only">Course grades and progress</caption>
+              <thead>
+                <tr class="text-slate-600">
+                  <th class="p-2">Course</th>
+                  <th class="p-2">Grade</th>
+                  <th class="p-2">Progress</th>
+                  <th class="p-2">Action</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="bg-white p-4 rounded-2xl shadow">
+          <h3 class="font-medium mb-3">Recent Activity</h3>
+          <ul id="activity" class="text-sm text-slate-600 space-y-2"></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Accessible Modal -->
+  <div id="modal" class="fixed inset-0 hidden items-center justify-center bg-black/40 z-50" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div id="modalPanel" class="bg-white rounded-xl p-6 w-11/12 max-w-2xl mx-4 focus:outline-none" tabindex="-1">
+      <div class="flex items-start justify-between mb-4">
+        <h3 id="modalTitle" class="text-lg font-semibold"></h3>
+        <div class="flex items-center gap-2">
+          <button id="prevBtn" class="px-2 py-1 rounded hover:bg-slate-100" title="Previous course" aria-label="Previous">◀</button>
+          <button id="nextBtn" class="px-2 py-1 rounded hover:bg-slate-100" title="Next course" aria-label="Next">▶</button>
+          <button id="closeModal" class="px-3 py-1 rounded bg-slate-100" aria-label="Close dialog">Close ✕</button>
+        </div>
+      </div>
+      <div id="modalBody" class="text-sm text-slate-700 space-y-3"></div>
+    </div>
+  </div>
+
+<script>
+/* ---------------------------
+   Sample data (can be replaced with API calls)
+   --------------------------- */
+const coursesData = [
+  { id:1, course:'Math 101', grade:88, progress:72, details:'Lessons completed 18/25. Next assignment due: 2025-12-05.', updated:'2025-11-30' },
+  { id:2, course:'Physics 201', grade:76, progress:55, details:'Labs completed 5/9. Study chapters 4-6.', updated:'2025-11-28' },
+  { id:3, course:'History 150', grade:92, progress:100, details:'Course complete. Certificate available.', updated:'2025-11-25' },
+  { id:4, course:'Programming I', grade:81, progress:63, details:'Project milestone due next week.', updated:'2025-11-29' },
+  { id:5, course:'Art & Design', grade:70, progress:40, details:'Start module 3: Color theory.', updated:'2025-11-27' }
+];
+
+const announcementsData = [
+  { id:1, title:'Midterm next week', body:'Midterm schedule posted. Check calendar for your slot.', when:'2 days ago', pinned:true },
+  { id:2, title:'Project guidelines updated', body:'Updated rubric for Programming I project.', when:'5 days ago', pinned:false },
+  { id:3, title:'Holiday notice', body:'No classes on 2025-12-25.', when:'1 week ago', pinned:false }
+];
+
+const activityData = [
+  'Submitted Homework 4 for Math 101',
+  'Commented on Physics 201 forum',
+  'Completed lesson: History 150 — The Renaissance',
+];
+
+/* ---------------------------
+   Utility functions
+   --------------------------- */
+function $(sel){ return document.querySelector(sel); }
+function $all(sel){ return Array.from(document.querySelectorAll(sel)); }
+
+function calculateOverallPercent(data){
+  if(!data.length) return 0;
+  const sum = data.reduce((s,c)=> s + (c.progress||0), 0);
+  return Math.round(sum / data.length);
+}
+
+/* ---------------------------
+   Renderers
+   --------------------------- */
+const annRoot = $('#announcements');
+const coursesRoot = $('#courses');
+const tableBody = $('#gradesTable tbody');
+const activityRoot = $('#activity');
+const overallBar = $('#overallBar');
+const overallPercentEl = $('#overallPercent');
+
+function renderAnnouncements(){
+  annRoot.innerHTML = '';
+  // pinned first
+  const sorted = [...announcementsData].sort((a,b)=> (b.pinned - a.pinned));
+  sorted.forEach(a=>{
+    const card = document.createElement('article');
+    card.className = 'p-3 bg-white rounded-lg border';
+    card.innerHTML = `
+      <div class="flex items-start justify-between">
+        <div>
+          <h4 class="font-medium">${a.title}${a.pinned ? ' • Pinned' : ''}</h4>
+          <p class="text-sm text-slate-600 mt-1">${a.body}</p>
+        </div>
+        <div class="text-xs text-slate-400 ml-3">${a.when}</div>
+      </div>
+    `;
+    annRoot.appendChild(card);
+  });
+}
+
+function renderCourses(){
+  coursesRoot.innerHTML = '';
+  coursesData.forEach(c=>{
+    const row = document.createElement('div');
+    row.className = 'p-3 border rounded-lg flex items-center justify-between';
+    row.innerHTML = `
+      <div class="w-2/3">
+        <div class="font-medium">${escapeHTML(c.course)}</div>
+        <div class="text-xs text-slate-500">Grade: ${c.grade}%</div>
+        <div class="mt-2 bg-slate-100 rounded-full h-3 overflow-hidden">
+          <div class="progress-bar h-3 rounded-full" style="width:0%; background-color: ${progressColor(c.progress)};"></div>
+        </div>
+      </div>
+      <div class="text-sm text-slate-500 ml-3 text-right">
+        <div>${c.progress}%</div>
+        <div class="mt-2"><button class="view-btn px-2 py-1 mt-2 rounded bg-slate-100" data-id="${c.id}">View</button></div>
+      </div>
+    `;
+    coursesRoot.appendChild(row);
+    // animate progress
+    requestAnimationFrame(()=>{
+      row.querySelector('.progress-bar').style.width = c.progress + '%';
+    });
+  });
+
+  // overall
+  const overall = calculateOverallPercent(coursesData);
+  overallBar.style.width = overall + '%';
+  overallBar.style.backgroundColor = progressColor(overall);
+  overallPercentEl.textContent = overall + '%';
+}
+
+function renderTable(rows){
+  tableBody.innerHTML = '';
+  rows.forEach(r=>{
+    const tr = document.createElement('tr');
+    tr.className = 'border-b';
+    tr.innerHTML = `
+      <td class="p-2">${escapeHTML(r.course)}</td>
+      <td class="p-2">${r.grade}%</td>
+      <td class="p-2">${r.progress}%</td>
+      <td class="p-2"><button class="openBtn px-2 py-1 bg-slate-100 rounded" data-id="${r.id}">View</button></td>
+    `;
+    tableBody.appendChild(tr);
+  });
+}
+
+function renderActivity(){
+  activityRoot.innerHTML = '';
+  activityData.forEach(a=>{
+    const li = document.createElement('li');
+    li.className = 'flex items-center gap-2';
+    li.innerHTML = `<span class="text-xs text-slate-400">●</span><span>${escapeHTML(a)}</span>`;
+    activityRoot.appendChild(li);
+  });
+}
+
+/* ---------------------------
+   Helpers: sort/filter/export
+   --------------------------- */
+let currentRows = [...coursesData];
+let sortKey = 'course';
+let sortAsc = true;
+
+function sortRows(key, asc=true){
+  currentRows.sort((a,b)=>{
+    const A = a[key];
+    const B = b[key];
+    if(typeof A === 'string') return asc ? A.localeCompare(B) : B.localeCompare(A);
+    return asc ? (A - B) : (B - A);
+  });
+}
+
+function filterRows(q){
+  q = q.trim().toLowerCase();
+  if(!q) return [...coursesData];
+  return coursesData.filter(r => r.course.toLowerCase().includes(q));
+}
+
+function exportCSV(rows){
+  const headers = ['Course','Grade','Progress'];
+  const lines = rows.map(r => [r.course, r.grade, r.progress].map(csvEscape).join(','));
+  const csv = [headers.join(','), ...lines].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'lms_grades.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/* ---------------------------
+   Modal logic (accessible)
+   --------------------------- */
+const modal = $('#modal');
+const modalPanel = $('#modalPanel');
+const modalTitle = $('#modalTitle');
+const modalBody = $('#modalBody');
+let currentModalIndex = -1;
+
+function openModalById(id){
+  const idx = currentRows.findIndex(r => r.id === id);
+  if(idx === -1) return;
+  currentModalIndex = idx;
+  const item = currentRows[idx];
+  showModalContent(item);
+  showModal();
+}
+
+function showModalContent(item){
+  modalTitle.textContent = item.course;
+  modalBody.innerHTML = `
+    <div class="text-sm text-slate-700"><strong>Grade:</strong> ${item.grade}%</div>
+    <div class="text-sm text-slate-700"><strong>Progress:</strong> ${item.progress}%</div>
+    <div class="text-sm text-slate-700 mt-2">${escapeHTML(item.details)}</div>
+    <div class="text-xs text-slate-400 mt-3">Last updated: ${escapeHTML(item.updated || '—')}</div>
+  `;
+  // focus first focusable element in modal
+  setTimeout(()=> modalPanel.focus(), 50);
+}
+
+function showModal(){
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  // trap focus (simple)
+  document.addEventListener('focus', trapFocus, true);
+}
+
+function closeModalFn(){
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+  document.removeEventListener('focus', trapFocus, true);
+}
+
+function trapFocus(e){
+  if(!modal.contains(e.target)) {
+    e.stopPropagation();
+    modalPanel.focus();
+  }
+}
+
+/* ---------------------------
+   Tiny utilities and safety
+   --------------------------- */
+function escapeHTML(s){ return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+function csvEscape(s){ return `"${String(s).replaceAll('"','""')}"`; }
+function progressColor(p){
+  if(p >= 80) return '#10b981'; // green
+  if(p >= 50) return '#f59e0b'; // amber
+  return '#ef4444'; // red
+}
+
+/* ---------------------------
+   Event wiring
+   --------------------------- */
+function wireEvents(){
+  // sorting controls
+  $('#sortSelect').addEventListener('change', (e)=>{
+    sortKey = e.target.value;
+    sortRows(sortKey, sortAsc);
+    renderTable(currentRows);
+  });
+  $('#sortToggle').addEventListener('click', (e)=>{
+    sortAsc = !sortAsc;
+    e.target.textContent = sortAsc ? 'Asc' : 'Desc';
+    e.target.setAttribute('aria-pressed', String(!sortAsc));
+    sortRows(sortKey, sortAsc);
+    renderTable(currentRows);
+  });
+
+  // filtering
+  $('#filterInput').addEventListener('input', (e)=>{
+    currentRows = filterRows(e.target.value);
+    sortRows(sortKey, sortAsc);
+    renderTable(currentRows);
+  });
+
+  // export
+  $('#exportCSV').addEventListener('click', ()=> exportCSV(currentRows));
+
+  // delegate open buttons in table and course cards
+  document.addEventListener('click', (e)=>{
+    if(e.target.matches('.openBtn') || e.target.matches('.view-btn')){
+      const id = Number(e.target.dataset.id);
+      openModalById(id);
+    }
+  });
+
+  // close modal
+  $('#closeModal').addEventListener('click', closeModalFn);
+  // prev/next
+  $('#prevBtn').addEventListener('click', ()=>{
+    if(currentModalIndex > 0) currentModalIndex--;
+    showModalContent(currentRows[currentModalIndex]);
+  });
+  $('#nextBtn').addEventListener('click', ()=>{
+    if(currentModalIndex < currentRows.length - 1) currentModalIndex++;
+    showModalContent(currentRows[currentModalIndex]);
+  });
+
+  // keyboard: Esc to close, left/right for prev/next
+  document.addEventListener('keydown', (e)=>{
+    if(modal.classList.contains('flex')){
+      if(e.key === 'Escape') closeModalFn();
+      if(e.key === 'ArrowLeft' && currentModalIndex > 0){ currentModalIndex--; showModalContent(currentRows[currentModalIndex]); }
+      if(e.key === 'ArrowRight' && currentModalIndex < currentRows.length-1){ currentModalIndex++; showModalContent(currentRows[currentModalIndex]); }
+    }
+  });
+
+  // simple create new course button (demo)
+  $('#newCourseBtn').addEventListener('click', ()=>{
+    const nextId = Math.max(...coursesData.map(c=>c.id)) + 1;
+    const newCourse = { id: nextId, course: `New Course ${nextId}`, grade:0, progress:0, details:'Newly created course.', updated: new Date().toISOString().slice(0,10) };
+    coursesData.push(newCourse);
+    // re-render master lists
+    currentRows = [...coursesData];
+    sortRows(sortKey, sortAsc);
+    renderCourses(); renderTable(currentRows);
+  });
+
+  // accessible click outside modal to close
+  modal.addEventListener('click', (e)=>{ if(e.target === modal) closeModalFn(); });
+
+  // role change (demo to show how UI could react)
+  $('#role').addEventListener('change', (e)=>{
+    const role = e.target.value;
+    // small demo behavior: instructors see pinned announcements first
+    if(role === 'Instructor') {
+      announcementsData.unshift({ id:999, title:'Instructor note', body:'You can pin announcements from course admin.', when:'just now', pinned:true });
+      renderAnnouncements();
+    } else {
+      // noop in demo
+    }
+  });
+}
+
+/* ---------------------------
+   Initialization
+   --------------------------- */
+function init(){
+  renderAnnouncements();
+  renderCourses();
+  currentRows = [...coursesData];
+  sortRows(sortKey, sortAsc);
+  renderTable(currentRows);
+  renderActivity();
+  wireEvents();
+}
+
+init();
+</script>
+</body>
+</html>
